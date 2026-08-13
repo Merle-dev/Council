@@ -1,5 +1,5 @@
 {
-  description = "Rust Calculator";
+  description = "Rust Password Manager";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -14,7 +14,7 @@
       {
         # This builds your executable
         packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "hvcl";
+          pname = "council";
           version = "0.1.0";
           src = ./.; # Points to your source code
 
@@ -33,14 +33,7 @@
           buildInputs = with pkgs; [
             cargo
             rustc
-            gtk4
-            gtk4-layer-shell
-            glib
-            gdk-pixbuf
-            pango
-            cairo
-            graphene
-            libadwaita
+            
           ];
         };
 
@@ -49,9 +42,6 @@
           buildInputs = with pkgs; [
             cargo
             rustc
-            pkg-config
-            gtk4
-            gtk4-layer-shell
           ];
         };
       });
