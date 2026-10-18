@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -12,15 +14,19 @@ use crate::{AppState, CouncilListItem, app_state::CreateNewEntry};
 pub fn run(terminal: &mut DefaultTerminal, state: &mut AppState) -> Result<()> {
     terminal.draw(|frame| state.draw(frame))?;
     while !state.exit {
-        event::read()?
-            .as_key_event()
-            .map(|key| state.compute_key(key));
+        if event::poll(Duration::from_mins(3))? {
+            event::read()?
+                .as_key_event()
+                .map(|key| state.compute_key(key));
 
-        match state.new_item_input.is_some() {
-            true => terminal.show_cursor()?,
-            false => terminal.hide_cursor()?,
-        };
-        terminal.draw(|frame| state.draw(frame))?;
+            match state.new_item_input.is_some() {
+                true => terminal.show_cursor()?,
+                false => terminal.hide_cursor()?,
+            };
+            terminal.draw(|frame| state.draw(frame))?;
+        } else {
+            break;
+        }
     }
     Ok(())
 }
@@ -44,7 +50,10 @@ impl AppState {
             add_modifier: Modifier::BOLD,
             ..Default::default()
         })
-        .block(Block::bordered());
+        .block(match self.search.is_empty() {
+            true => Block::bordered(),
+            false => Block::bordered().title(self.search.clone()),
+        });
 
         frame.render_stateful_widget(
             list,
@@ -59,6 +68,7 @@ impl AppState {
         } else {
             frame.render_widget(Block::bordered(), layout[1]);
         }
+
         if let Some(delete_entry) = self.confirm_deletion_menu {
             let name = self
                 .items

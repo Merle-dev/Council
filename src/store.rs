@@ -3,6 +3,7 @@ use std::{
     fs::{File, create_dir},
     io::{Read, Write},
     path::PathBuf,
+    sync::Arc,
 };
 
 use anyhow::{Result, anyhow};
@@ -27,7 +28,7 @@ fn file_dir() -> Result<PathBuf> {
     Ok(path)
 }
 
-pub fn write_to_disk(mut items: Vec<CouncilListItem>, vault: &Vault) -> Result<()> {
+pub fn write_to_disk(mut items: Vec<CouncilListItem>, vault: Arc<Vault>) -> Result<()> {
     items.sort_by_key(|entry| entry.name.clone());
     let write_data = items
         .iter()
@@ -96,7 +97,7 @@ fn council_store_to_council_list(mut vec: Vec<CouncilStoreItem>) -> Vec<CouncilL
                 password,
                 password_gen_rules: "".to_string(),
                 info,
-                selected_info: 0,
+                selected_info: 1,
             },
         )
         .collect()

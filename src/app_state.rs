@@ -1,10 +1,13 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    ops::Index,
+    sync::{Arc, Mutex},
+};
 
 use arboard::Clipboard;
 use rand::random_range;
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::STD_PW_CHARS;
+use crate::{STD_PW_CHARS, crypto::Vault, store};
 
 #[derive(Clone)]
 pub struct CouncilListItem {
@@ -30,11 +33,13 @@ impl CouncilListItem {
 #[derive(Clone)]
 pub struct AppState {
     pub exit: bool,
+    pub search: String,
     pub list_index: usize,
     pub items: Vec<CouncilListItem>,
     pub new_item_input: Option<CreateNewEntry>,
     pub confirm_deletion_menu: Option<usize>,
     pub clipboard: Arc<Mutex<Clipboard>>,
+    pub vault: Arc<Vault>,
 }
 
 #[derive(Clone, Debug)]
@@ -53,6 +58,7 @@ pub struct CreateNewEntry {
     pub password_gen_len: usize,
     pub password_gen_scroll: usize,
     pub cursor_text_pos: CursorTextPositions,
+    pub edit: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -77,6 +83,7 @@ impl Default for CreateNewEntry {
                 password_gen: 0,
                 info: vec![],
             },
+            edit: None,
         }
     }
 }
@@ -88,7 +95,8 @@ impl AppState {
                 KeyCode::Char('n') => self.confirm_deletion_menu = None,
                 KeyCode::Char('y') => {
                     self.items.remove(delete_entry_index);
-                    self.confirm_deletion_menu = None
+                    self.confirm_deletion_menu = None;
+                    store::write_to_disk(self.items.clone(), self.vault.clone()).unwrap()
                 }
                 _ => (),
             }
@@ -98,12 +106,33 @@ impl AppState {
                 self.new_item_input = None;
             } else if key_event.code == KeyCode::Enter && create_new_entry.is_ready() {
                 create_new_entry.clean_up();
-                self.items.push(create_new_entry.item.clone());
+                if let Some(idx) = create_new_entry.edit {
+                    self.items[idx] = create_new_entry.item.clone();
+                } else {
+                    self.items.push(create_new_entry.item.clone());
+                }
                 self.new_item_input = None;
+                store::write_to_disk(self.items.clone(), self.vault.clone()).unwrap()
             }
         } else {
             match key_event.code {
                 KeyCode::Char('N') => self.new_item_input = Some(CreateNewEntry::default()),
+                KeyCode::Char('E') => {
+                    let item = &self.items[self.list_index];
+                    self.new_item_input = Some(CreateNewEntry {
+                        item: item.clone(),
+                        selected: CouncilItemSelect::Password,
+                        generate_phase: false,
+                        edit: Some(self.list_index),
+                        cursor_text_pos: CursorTextPositions {
+                            name: 0,
+                            password: 0,
+                            password_gen: 0,
+                            info: item.info.iter().map(|_| (0, 0)).collect(),
+                        },
+                        ..Default::default()
+                    })
+                }
                 KeyCode::Up => self.list_index = self.list_index.saturating_sub(1),
                 KeyCode::Down => {
                     self.list_index = (self.list_index + 1).min(self.items.len().saturating_sub(1))
@@ -135,6 +164,24 @@ impl AppState {
                     }
                 }
                 KeyCode::Esc => self.exit = true,
+                KeyCode::Backspace | KeyCode::Char('h')
+                    if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                {
+                    self.search.clear()
+                }
+
+                KeyCode::Backspace => {
+                    self.search.pop();
+                }
+                KeyCode::Char(c) if (97..=122).contains(&(c as u8)) => {
+                    self.search.push(c);
+                    for (index, item) in self.items.iter().enumerate().rev() {
+                        if item.name.to_lowercase().starts_with(&self.search) {
+                            self.list_index = index;
+                        }
+                    }
+                }
+
                 _ => (),
             }
         }
